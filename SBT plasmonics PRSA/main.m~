@@ -1,0 +1,206 @@
+clear all
+close all
+load Leg
+load Dleg
+load z
+load dz
+
+%% Shapes
+f_s = sqrt(1-z.^2); % f of spheroid
+f = (f_s).*(3+z)/3; % f of asymmetric shape
+%f = sqrt(1-z.^2 + 0.1*(cos(2*pi*(z+1)/2)-1)).*(3+z)/3;
+%f = sqrt(1-z.^2 + 0.1*(cos(2*pi*(z+1)/2)-1));
+
+%% Other parameters
+h = 0.08; % slenderness parameter
+N = 7; % number of modes
+
+%% Reduced eigenvalue problem
+% numerical scheme
+sig = 1;
+for kk=2:N
+    sig=[sig (sig(end)+1/kk)];
+end
+alpha = -2*sig;
+lam_spher = (4./(1:N)./((1:N)+1)./(2*log(2/h)+alpha(1:N)))/h^2;
+lam_logspher = (4./(1:N)./((1:N)+1)./(2*log(1/h)))/h^2;
+
+log_term = log(f_s./f);
+sub_term = f.^2-f_s.^2;
+log_diag = diag(log(2/h)/2+alpha(1:N)/4);
+
+
+A=zeros(N,N); B=A;
+for nn=1:N
+    sumn(nn)=sum(1:nn);
+    for mm=1:N       
+       A(nn,mm)=(2*nn+1)/4*trapz(Leg(nn,:).*Leg(mm,:).*log_term*dz);       
+       B(nn,mm)=(2*nn+1)/2*(trapz(DLeg(mm,:).*DLeg(nn,:).*sub_term*dz)-(sumn(nn))*((f(end))^2+(-1)^(nn+mm)*(f(1))^2));
+    end
+end
+
+M=(log_diag+A)*(diag((1:N).*((1:N)+1))+B);
+[V,D]=eig(M);
+lam=1./eig(M)/h^2;
+
+% solutions in term of Legendre Polynomials
+in_pos=find((real(lam)>0) & (abs(imag(lam))<0.0000001));
+[lam_kk,in_pos_kk]=sort(lam(in_pos),'descend');
+in_pos_kk=in_pos(in_pos_kk);
+v=zeros(length(in_pos_kk),length(z));
+m=zeros(length(in_pos_kk),length(z));
+M_ = pi*inv(D)*(diag((1:N).*((1:N)+1))+B)*V;
+for kk=1:length(in_pos_kk)    
+    for ii=1:N
+        v(kk,:)=v(kk,:)+Leg(ii,:)*V(ii,in_pos_kk(kk));
+    end
+end
+for i = 1:length(v(:,1))
+    m(i,:) = -pi*lam_kk(i)*h^2*derivative(f.^2.*derivative(v(i,:),dz),dz);
+end
+
+%% plots
+
+% asymmetric shape 3D
+figure
+t = linspace(0,2*pi,30);
+[T,U] = meshgrid(t,z);
+%F = @(z)del*sqrt(1-z.^2);  
+for ii=1:length(t)
+    for jj=1:length(z)
+        F(ii,jj)=h*f(jj);
+    end
+end
+X = F'.*cos(T);
+Y = F'.*sin(T);
+Z = U;
+mesh(Z,X,Y);
+axis equal
+title('asymmetric shape')
+hold on
+colormap copper
+
+% asymmetric shape 2D
+figure
+plot(z, f*h,'k')
+hold on
+plot(z,-f*h,'k')
+axis equal
+axis([-1,1,-1,1])
+rotate3d
+xlabel('z-axis')
+title('asymmetric shape')
+
+
+% eigenvalues of sphere v/s eigenvalues of asymmetric shape
+figure
+plot(lam_kk,'o')
+hold on
+plot(sort(lam_spher,'descend'),'*')
+axis([0,25,0,1000])
+
+% first modes voltage v(z)
+figure
+plot(z,v(1,:))
+hold on
+plot(z,v(2,:))
+plot(z,v(3,:))
+rotate3d
+xlabel('z-axis')
+title('V_n(z)')
+legend({'n = 1','n = 2', 'n = 3'},'Location','northeast')
+grid on;
+
+% first modes surface charge m(z)
+figure
+plot(z,m(1,:))
+hold on
+plot(z,m(2,:))
+plot(z,m(3,:))
+lam_kk(1:4)
+rotate3d
+xlabel('z-axis')
+title('m_n(z)')
+legend({'n = 1','n = 2', 'n = 3'},'Location','northeast')
+grid on;
+
+% first mode voltage v(z) of: shperiod v/s asymmetric shape
+figure
+j = 1;
+plot(z, -Leg(j,:)/sqrt(trapz(f_s.^2.*derivative(Leg(j,:),dz).^2)*dz),'b', 'LineWidth',1)
+hold on
+plot(z,v(j,:)/sqrt(trapz(f.^2.*derivative(v(j,:),dz).^2)*dz),'--r', 'LineWidth',1); pbaspect([1.7 1 1]);
+legend('spheroid', 'asymmetric shape','interpreter', 'latex'); legend('boxoff'); xlabel('$z$-axis', 'interpreter', 'latex'); ylabel('$v^{(1)}(z)$','interpreter', 'latex');
+grid off;
+print -dpdf v_1.pdf
+savefig('v_1.fig')
+
+% second mode voltage v(z) of: shperiod v/s asymmetric shape
+figure
+j = 2;
+plot(z, Leg(j,:)/sqrt(trapz(f_s.^2.*derivative(Leg(j,:),dz).^2)*dz),'b', 'LineWidth',1)
+hold on
+plot(z,v(j,:)/sqrt(trapz(f.^2.*derivative(v(j,:),dz).^2)*dz),'--r', 'LineWidth',1); pbaspect([1.7 1 1]);
+legend('spheroid', 'asymmetric shape','interpreter', 'latex'); legend('boxoff'); xlabel('$z$-axis', 'interpreter', 'latex'); ylabel('$v^{(2)}(z)$','interpreter', 'latex');
+grid off;
+print -dpdf v_2.pdf
+savefig('v_2.fig')
+
+% third mode voltage v(z) of: shperiod v/s asymmetric shape
+figure
+pbaspect([1.7 1 1]);
+j = 3;
+plot(z, Leg(j,:)/sqrt(trapz(f_s.^2.*derivative(Leg(j,:),dz).^2)*dz),'b', 'LineWidth',1)
+hold on
+plot(z,v(j,:)/sqrt(trapz(f.^2.*derivative(v(j,:),dz).^2)*dz),'--r', 'LineWidth',1); pbaspect([1.7 1 1]);
+legend('spheroid', 'asymmetric shape','interpreter', 'latex'); legend('boxoff'); xlabel('$z$-axis', 'interpreter', 'latex'); ylabel('$v^{(3)}(z)$','interpreter', 'latex');
+grid off;
+print -dpdf v_3.pdf
+savefig('v_3.fig')
+%% Polarizability and absorption cross-section
+% approximation of the Polarizability for the asymmetric shape
+for i = 1:size(m,1)
+    cc(i) = trapz(z.*m(i,:)*dz)^2;
+    dv = NaN(size(v(i,:)));
+    dv(2:end) = diff(v(i,:))/dz;
+    dv = fillmissing(dv,'linear');
+    dd(i) = lam_kk(i)*h^2*trapz(pi*f.^2.*dv.^2*dz);
+end
+pol =@(eps) sum((eps-1)./(eps+lam_kk').*cc./dd);
+wavelength = linspace(450*(1e-9),2200*(1e-9),4000); % range of wavelengths for the incident plane wave
+eps = LD(wavelength, 'Au', 'D'); % permittivity based on the Drude model
+polarizability = zeros(size(eps));
+for i = 1:length(eps)
+    polarizability(i) = pol(eps(i));
+end
+Vol = trapz(f.^2*pi*h^2*dz);
+Vol_approx = real(sum(cc./dd.*(1./lam_kk)'));
+
+% approximation of the Polarizability for a prolate spheroid
+cc_s = trapz(z.*Leg(1,:)*dz)^2;
+dd_s = lam_spher(1)*h^2*trapz(pi*f_s.^2.*DLeg(1,:).^2*dz)/(2*pi*lam_spher(1)*h^2)^2;
+pol_s =@(eps) (eps-1)./(eps+lam_spher(1))*cc_s/dd_s;
+polarizability_s = pol_s(eps);
+
+% exact Polarizability for a prolate spheroid (from "Absorption and Scattering of Light by Small Particles" by Borhen and Huffman)
+ecc = sqrt(1-h^2); 
+L1 = (1-ecc^2)/ecc^2*(-1 + 1/2/ecc*log((1+ecc)/(1-ecc)));
+alpha =@(L) 4*pi*h^2*(eps-1)./(3+3*L*(eps-1));
+pol_ex =alpha(L1) + 0*alpha((1-L1)/2);
+
+wavelength = 1e9*wavelength;
+
+figure; plot(wavelength , 2*pi/3./wavelength.*imag(pol_ex)/(4/3*pi*h^2), 'k', 'LineWidth',1); hold on; plot(wavelength , 2*pi/3./wavelength.*imag(polarizability)/trapz(h^2*f.^2*pi*dz),'--r','LineWidth',1); 
+legend('spheroid', 'asymmetric shape','interpreter', 'latex'); legend('boxoff'); xlabel('wavelength $(nm)$', 'interpreter', 'latex'); ylabel('averaged extinction cross section / $V$ ($nm^{-1}$)','interpreter', 'latex');
+%X0 = [.5 .85]; [dx, dy] = pol2cart(-pi/3.3,0.124); annotation('arrow',[X0(1) X0(1)+dx],[X0(2) X0(2)+dy]); X0 = [.5 .784]; [dx, dy] = pol2cart(-pi/3.3,0.145); annotation('arrow',[X0(1) X0(1)+dx],[X0(2) X0(2)+dy]); 
+grid off; set(gca, 'YScale', 'log');
+axes('pos',[.17 .65 .3 .3]); plot(z, 0.15+f_s*h,'k','LineWidth',1); hold on; plot(z,0.15-f_s*h,'k','LineWidth',1); plot(z,-0.15+f*h,'r','LineWidth',1); plot(z,-0.15-f*h,'r','LineWidth',1); axis equal; set(gca,'Visible','off')
+
+figure;  
+plot(wavelength , 2*pi/3./wavelength.*imag(pol_ex)/(4/3*pi*h^2), 'black', 'LineWidth',1); hold on; plot(wavelength , 2*pi/3./wavelength.*imag(polarizability_s)/trapz(h^2*f_s.^2*pi*dz), '--b', 'LineWidth',1);
+legend('exact', 'asymptotic','interpreter', 'latex'); legend('boxoff'); xlabel('wavelength $(nm)$', 'interpreter', 'latex'); ylabel('averaged extinction cross section / $V$ ($nm^{-1}$)','interpreter', 'latex');
+grid off; set(gca, 'YScale', 'log'); 
+axes('pos',[.17 .65 .3 .3]); plot(z, f_s*h,'k','LineWidth',1); hold on; plot(z,-f_s*h,'k','LineWidth',1); axis equal; set(gca,'Visible','off')
+
+alpha =@(L) 4*pi*h^2*(eps-1)./(3+3*L*(eps-1))/((eps-1)./(eps+lam_spher(1)));
+
